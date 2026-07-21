@@ -2,7 +2,7 @@ app = "stockbot"
 primary_region = "nrt"
 
 [build]
-builder = "paackages"
+builder = "packages"
 
 [[services]]
 internal_port = 8080
