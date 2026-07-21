@@ -11,18 +11,17 @@ handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
 def get_stock_info(symbol):
     try:
-        stock = yf.Ticker(symbol)
-        data = stock.info
-        current = data.get('currentPrice')
-        previous_close = data.get('previousClose')
-        if not current or not previous_close:
+        hist = yf.Ticker(symbol).history(period='5d')
+        if len(hist) < 2:
             return None
+        current = hist['Close'].iloc[-1]
+        previous_close = hist['Close'].iloc[-2]
         change = current - previous_close
         change_pct = (change / previous_close) * 100
         arrow = "📈" if change >= 0 else "📉"
         sign = "+" if change >= 0 else ""
         return f"{symbol}: NT${current:.2f} {arrow} {sign}{change_pct:.2f}%"
-    except:
+    except Exception:
         return None
 
 @app.route("/callback", methods=['POST'])
