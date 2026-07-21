@@ -1,0 +1,9 @@
+app = "stockbot"
+primary_region = "nrt"
+
+[build]
+builder = "paackages"
+
+[[services]]
+internal_port = 8080
+protocol = "tcp"
