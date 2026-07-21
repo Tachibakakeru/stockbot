@@ -1,7 +1,7 @@
 from flask import Flask, request
 from linebot import LineBotApi, WebhookHandler
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-import yfinance as yf
+import requests
 import os
 
 app = Flask(__name__)
@@ -9,13 +9,19 @@ app = Flask(__name__)
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
 handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
+session = requests.Session()
+session.headers.update({'User-Agent': 'Mozilla/5.0'})
+session.get('https://mis.twse.com.tw/stock/index.jsp', timeout=5)
+
 def get_stock_info(symbol):
     try:
-        hist = yf.Ticker(symbol).history(period='5d')
-        if len(hist) < 2:
-            return None
-        current = hist['Close'].iloc[-1]
-        previous_close = hist['Close'].iloc[-2]
+        code = symbol[:-3] if symbol.endswith('.TW') else symbol
+        market = 'tse' if not code.startswith('otc') else 'otc'
+        url = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{code}.tw'
+        data = session.get(url, timeout=5).json()
+        info = data['msgArray'][0]
+        previous_close = float(info['y'])
+        current = float(info['z']) if info['z'] != '-' else previous_close
         change = current - previous_close
         change_pct = (change / previous_close) * 100
         arrow = "📈" if change >= 0 else "📉"
