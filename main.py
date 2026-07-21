@@ -15,27 +15,20 @@ session.get('https://mis.twse.com.tw/stock/index.jsp', timeout=5)
 
 def get_stock_info(symbol):
     try:
-        if symbol.endswith('.TW'):
-            code = symbol[:-3]
-            market = 'tse' if not code.startswith('otc') else 'otc'
-            url = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{code}.tw'
-            data = session.get(url, timeout=5).json()
-            info = data['msgArray'][0]
-            previous_close = float(info['y'])
-            current = float(info['z']) if info['z'] != '-' else previous_close
-            currency = 'NT$'
-        else:
-            url = f'https://stooq.com/q/d/l/?s={symbol.lower()}&i=d'
-            rows = session.get(url, timeout=5).text.strip().splitlines()[1:]
-            if len(rows) < 2:
-                return None
-            previous_close, current = [float(r.split(',')[4]) for r in rows[-2:]]
-            currency = '$'
+        if not symbol.endswith('.TW'):
+            return None
+        code = symbol[:-3]
+        market = 'tse' if not code.startswith('otc') else 'otc'
+        url = f'https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch={market}_{code}.tw'
+        data = session.get(url, timeout=5).json()
+        info = data['msgArray'][0]
+        previous_close = float(info['y'])
+        current = float(info['z']) if info['z'] != '-' else previous_close
         change = current - previous_close
         change_pct = (change / previous_close) * 100
         arrow = "📈" if change >= 0 else "📉"
         sign = "+" if change >= 0 else ""
-        return f"{symbol}: {currency}{current:.2f} {arrow} {sign}{change_pct:.2f}%"
+        return f"{symbol}: NT${current:.2f} {arrow} {sign}{change_pct:.2f}%"
     except Exception:
         return None
 
@@ -62,7 +55,7 @@ def handle_message(event):
             results.append(info if info else f"❌ {code} 找不到")
         reply = '\n'.join(results) if results else "請輸入正確的股票代碼"
     else:
-        reply = "📈 股價查詢\n輸入『股代碼』查詢\n\n例子：\n股2330（台股）\n股AAPL.US（美股）\n股2330,2454,AAPL.US"
+        reply = "📈 股價查詢\n輸入『股代碼』查詢\n\n例子：\n股2330\n股2330,2454,5480"
     line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
 
 if __name__ == '__main__':
