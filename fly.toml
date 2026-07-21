@@ -1,13 +1,6 @@
 app = "stockbot"
 primary_region = "nrt"
 
-[build]
-  builder = "heroku/buildpacks:20"
-
 [[services]]
   internal_port = 8080
   protocol = "tcp"
-  
-  [services.concurrency]
-    hard_limit = 25
-    soft_limit = 20
