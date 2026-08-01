@@ -710,7 +710,7 @@ def check_price_alerts():
 def daily_summary_push():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute('SELECT id, favorites FROM users WHERE push_enabled=1 AND favorites IS NOT NULL AND favorites != ""')
+    c.execute('SELECT user_id, favorites FROM users WHERE push_enabled=1 AND favorites IS NOT NULL AND favorites != ""')
     rows = c.fetchall()
     conn.close()
     
@@ -983,7 +983,7 @@ def handle_message(event):
     if text == '開啟推播':
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute('INSERT INTO users (id, push_enabled) VALUES (?, 1) ON CONFLICT(id) DO UPDATE SET push_enabled=1', (user_id,))
+        c.execute('INSERT INTO users (user_id, push_enabled) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET push_enabled=1', (user_id,))
         conn.commit()
         conn.close()
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="✅ 已開啟盤後總結自動推播！每日下午 1:35 將為您整理持股狀況。"))
@@ -992,7 +992,7 @@ def handle_message(event):
     if text == '關閉推播':
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
-        c.execute('UPDATE users SET push_enabled=0 WHERE id=?', (user_id,))
+        c.execute('UPDATE users SET push_enabled=0 WHERE user_id=?', (user_id,))
         conn.commit()
         conn.close()
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="✅ 已關閉自動推播。"))
