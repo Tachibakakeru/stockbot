@@ -263,8 +263,8 @@ def get_futures_info(commodity_id):
         quote_list = data.get('RtData', {}).get('QuoteList', [])
         if not quote_list:
             return None
-        # Find first item that has an actual last price
-        item = next((q for q in quote_list if q.get('CLastPrice')), None)
+        # Skip aggregate rows (-S/-P), take first real contract (-F day, -M night)
+        item = next((q for q in quote_list if q.get('SymbolID', '').endswith(('-F', '-M'))), None)
         if not item:
             return None
         last = item.get('CLastPrice', '')
