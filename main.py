@@ -1154,8 +1154,6 @@ def handle_message(event):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 您的最愛清單中的股票目前查詢失敗。"))
         elif text in ('夜盤', '美股盤後'):
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ 【{text}】資料暫無，請稍後再試"))
-        else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 查無資料：{', '.join(codes)}"))
         return
 
     if len(bubbles) > 12:
