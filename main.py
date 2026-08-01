@@ -339,9 +339,14 @@ def resolve_stock_code(arg):
 
 def fetch_data(code):
     # Futures check before stock name resolution
-    _futures_map = {'TXF': 'TXF', 'TX': 'TXF', 'WTXP': 'WTXP', 'MTX': 'MTX', 'TE': 'TE', 'TF': 'TF', 'XIF': 'XIF'}
-    if code.upper() in _futures_map:
-        return get_futures_info(_futures_map[code.upper()])
+    _futures_map = {
+        'TXF': 'TXF', 'TX': 'TXF', 'WTXP': 'WTXP',
+        'MTX': 'MTX', 'TE': 'TE', 'TF': 'TF', 'XIF': 'XIF',
+        '台指期': 'TXF', '小台指': 'MTX', '小台': 'MTX', '小型台指': 'MTX',
+    }
+    _fkey = code.upper() if code.upper() in _futures_map else code
+    if _fkey in _futures_map:
+        return get_futures_info(_futures_map[_fkey])
 
     code = resolve_stock_code(code)
     indices_map = {
