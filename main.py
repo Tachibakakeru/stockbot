@@ -1132,7 +1132,8 @@ def handle_message(event):
         else:
             clean_text = text
         raw_codes = [c.strip() for c in clean_text.replace('，', ',').split(',') if c.strip()]
-        codes = [resolve_stock_code(c) for c in raw_codes]
+        _cn_futures = {'台指期': 'TXF', '小台指': 'MTX', '小台': 'MTX', '小型台指': 'MTX', '台指夜盤': 'WTXP'}
+        codes = [_cn_futures[c] if c in _cn_futures else resolve_stock_code(c) for c in raw_codes]
         
     if not codes:
         return 
