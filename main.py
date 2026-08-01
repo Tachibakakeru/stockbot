@@ -248,8 +248,11 @@ def get_crypto_info(symbol):
 def get_futures_info(commodity_id):
     """Query TAIFEX futures real-time data, works during night session (夜盤 15:00-05:00)"""
     try:
+        cid = commodity_id.upper()
+        # WTXP (夜盤台指期) shares TXF contract data on TAIFEX API
+        api_id = 'TXF' if cid == 'WTXP' else cid
         url = 'https://mis.taifex.com.tw/futures/api/getQuoteList'
-        payload = {"MarketType": "0", "CommodityID": commodity_id.upper(),
+        payload = {"MarketType": "0", "CommodityID": api_id,
                    "ContractMonth": "", "RowSize": "5", "PageNo": "",
                    "SortColumn": "", "AscDesc": "A"}
         resp = session.post(url, json=payload, timeout=5)
@@ -268,11 +271,11 @@ def get_futures_info(commodity_id):
         last, ref = float(last), float(ref)
         change = last - ref
         change_pct = (change / ref * 100) if ref != 0 else 0
-        disp = item.get('DispEName', commodity_id.upper())
-        name_base = {'TXF': '台指期', 'MTX': '小台指', 'TE': '電子期',
-                     'TF': '金融期', 'XIF': '非金電期'}.get(commodity_id.upper(), commodity_id.upper())
+        disp = item.get('DispEName', cid)
+        name_base = {'TXF': '台指期', 'WTXP': '台指夜盤', 'MTX': '小台指',
+                     'TE': '電子期', 'TF': '金融期', 'XIF': '非金電期'}.get(cid, cid)
         return {
-            'symbol': commodity_id.upper(),
+            'symbol': cid,
             'name': f'{name_base} ({disp})',
             'price': last,
             'change': change,
@@ -333,7 +336,7 @@ def resolve_stock_code(arg):
 
 def fetch_data(code):
     # Futures check before stock name resolution
-    _futures_map = {'TXF': 'TXF', 'TX': 'TXF', 'MTX': 'MTX', 'TE': 'TE', 'TF': 'TF', 'XIF': 'XIF'}
+    _futures_map = {'TXF': 'TXF', 'TX': 'TXF', 'WTXP': 'WTXP', 'MTX': 'MTX', 'TE': 'TE', 'TF': 'TF', 'XIF': 'XIF'}
     if code.upper() in _futures_map:
         return get_futures_info(_futures_map[code.upper()])
 
@@ -589,9 +592,9 @@ def create_stock_bubble(data):
         else:
             chart_url = f"https://tw.tradingview.com/chart/?symbol=BINANCE:{symbol_str}USDT"
     elif data.get('is_futures'):
-        tv_map = {'TXF': 'TXF1!', 'MTX': 'MTX1!', 'TE': 'TE1!', 'TF': 'TF1!'}
+        tv_map = {'TXF': 'WTX1!', 'WTXP': 'WTXP1!', 'MTX': 'WMTX1!', 'TE': 'TE1!', 'TF': 'TF1!'}
         tv_sym = tv_map.get(symbol_str, f'{symbol_str}1!')
-        chart_url = f"https://tw.tradingview.com/chart/?symbol=TAIFEX:{tv_sym}"
+        chart_url = f"https://tw.tradingview.com/chart/?symbol={tv_sym}"
     elif data.get('is_us'):
         chart_url = f"https://tw.tradingview.com/chart/?symbol={symbol_str}"
         if symbol_str.startswith('^'):
@@ -1069,7 +1072,7 @@ def handle_message(event):
     elif text in ['加密貨幣', 'crypto']:
         codes = ['BTC', 'ETH']
     elif text == '夜盤':
-        codes = ['TXF', 'MTX']
+        codes = ['WTXP']
 
     elif text == '指令表':
         quick_reply = QuickReply(items=[
