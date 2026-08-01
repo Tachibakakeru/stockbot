@@ -254,29 +254,26 @@ def get_futures_info(commodity_id):
                    "SortColumn": "", "AscDesc": "A"}
         resp = session.post(url, json=payload, timeout=5)
         data = resp.json()
-        if data.get('RtnCode') != 0:
+        if data.get('RtCode') != '0':
             return None
-        quote_list = data.get('Data', {}).get('QuoteList', [])
+        quote_list = data.get('RtData', {}).get('QuoteList', [])
         if not quote_list:
             return None
-        item = quote_list[0]
-        last = item.get('LastPrice', '-')
-        ref = item.get('ReferencePrice', '-')
-        if not last or last == '-' or not ref or ref == '-':
+        # Skip aggregate row (CTotalVolume empty), use first real contract
+        item = next((q for q in quote_list if q.get('CTotalVolume')), quote_list[0])
+        last = item.get('CLastPrice', '')
+        ref = item.get('CRefPrice', '')
+        if not last or not ref:
             return None
         last, ref = float(last), float(ref)
         change = last - ref
         change_pct = (change / ref * 100) if ref != 0 else 0
-        month = item.get('ContractMonth', '')
-        month_str = f"{month[:4]}/{month[4:]}" if len(month) >= 6 else month
-        name_map = {
-            'TXF': f'台指期 ({month_str})', 'MTX': f'小台指 ({month_str})',
-            'TE': f'電子期 ({month_str})', 'TF': f'金融期 ({month_str})',
-            'XIF': f'非金電期 ({month_str})',
-        }
+        disp = item.get('DispEName', commodity_id.upper())
+        name_base = {'TXF': '台指期', 'MTX': '小台指', 'TE': '電子期',
+                     'TF': '金融期', 'XIF': '非金電期'}.get(commodity_id.upper(), commodity_id.upper())
         return {
             'symbol': commodity_id.upper(),
-            'name': name_map.get(commodity_id.upper(), f'{commodity_id.upper()} ({month_str})'),
+            'name': f'{name_base} ({disp})',
             'price': last,
             'change': change,
             'change_pct': change_pct,
@@ -1155,7 +1152,11 @@ def handle_message(event):
     if not bubbles:
         if text == '我的最愛':
             line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 您的最愛清單中的股票目前查詢失敗。"))
-        return 
+        elif text in ('夜盤', '美股盤後'):
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"⚠️ 【{text}】資料暫無，請稍後再試"))
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"❌ 查無資料：{', '.join(codes)}"))
+        return
 
     if len(bubbles) > 12:
         bubbles = bubbles[:12]
