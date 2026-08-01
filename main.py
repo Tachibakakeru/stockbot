@@ -589,7 +589,7 @@ def create_stock_bubble(data):
         else:
             chart_url = f"https://tw.tradingview.com/chart/?symbol=BINANCE:{symbol_str}USDT"
     elif data.get('is_futures'):
-        tv_map = {'TXF': 'TX1!', 'MTX': 'MTX1!', 'TE': 'TE1!', 'TF': 'TF1!'}
+        tv_map = {'TXF': 'TXF1!', 'MTX': 'MTX1!', 'TE': 'TE1!', 'TF': 'TF1!'}
         tv_sym = tv_map.get(symbol_str, f'{symbol_str}1!')
         chart_url = f"https://tw.tradingview.com/chart/?symbol=TAIFEX:{tv_sym}"
     elif data.get('is_us'):
@@ -1070,8 +1070,6 @@ def handle_message(event):
         codes = ['BTC', 'ETH']
     elif text == '夜盤':
         codes = ['TXF', 'MTX']
-    elif text == '美股盤後':
-        codes = ['AAPL', 'NVDA', 'TSLA', 'MSFT', 'META']
 
     elif text == '指令表':
         quick_reply = QuickReply(items=[
