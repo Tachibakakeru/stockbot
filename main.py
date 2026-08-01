@@ -246,13 +246,14 @@ def get_crypto_info(symbol):
         return None
 
 def get_futures_info(commodity_id):
-    """Query TAIFEX futures real-time data, works during night session (夜盤 15:00-05:00)"""
+    """Query TAIFEX futures. WTXP uses MarketType=1 for live night session prices."""
     try:
         cid = commodity_id.upper()
-        # WTXP (夜盤台指期) shares TXF contract data on TAIFEX API
+        # WTXP = 台指期夜盤: same TXF contract but MarketType=1 (電子盤) for live night prices
         api_id = 'TXF' if cid == 'WTXP' else cid
+        market_type = "1" if cid == 'WTXP' else "0"
         url = 'https://mis.taifex.com.tw/futures/api/getQuoteList'
-        payload = {"MarketType": "0", "CommodityID": api_id,
+        payload = {"MarketType": market_type, "CommodityID": api_id,
                    "ContractMonth": "", "RowSize": "5", "PageNo": "",
                    "SortColumn": "", "AscDesc": "A"}
         resp = session.post(url, json=payload, timeout=5)
@@ -262,8 +263,10 @@ def get_futures_info(commodity_id):
         quote_list = data.get('RtData', {}).get('QuoteList', [])
         if not quote_list:
             return None
-        # Skip aggregate row (CTotalVolume empty), use first real contract
-        item = next((q for q in quote_list if q.get('CTotalVolume')), quote_list[0])
+        # Find first item that has an actual last price
+        item = next((q for q in quote_list if q.get('CLastPrice')), None)
+        if not item:
+            return None
         last = item.get('CLastPrice', '')
         ref = item.get('CRefPrice', '')
         if not last or not ref:
@@ -592,7 +595,7 @@ def create_stock_bubble(data):
         else:
             chart_url = f"https://tw.tradingview.com/chart/?symbol=BINANCE:{symbol_str}USDT"
     elif data.get('is_futures'):
-        tv_map = {'TXF': 'WTX1!', 'WTXP': 'WTXP1!', 'MTX': 'WMTX1!', 'TE': 'TE1!', 'TF': 'TF1!'}
+        tv_map = {'TXF': 'TXF1!', 'WTXP': 'TXF1!', 'MTX': 'MXF1!', 'TE': 'TE1!', 'TF': 'TF1!'}
         tv_sym = tv_map.get(symbol_str, f'{symbol_str}1!')
         chart_url = f"https://tw.tradingview.com/chart/?symbol={tv_sym}"
     elif data.get('is_us'):
