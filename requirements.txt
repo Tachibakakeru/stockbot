@@ -1,3 +1,9 @@
 flask
 line-bot-sdk==2.4.2
 requests
+apscheduler
+feedparser
+beautifulsoup4
+lxml
+psycopg2-binary
+gunicorn
