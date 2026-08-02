@@ -5,7 +5,7 @@ from linebot.models import (MessageEvent, TextMessage, TextSendMessage,
                             FlexSendMessage)
 import requests
 import os
-import sqlite3
+import psycopg2
 import concurrent.futures
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
@@ -22,41 +22,37 @@ try:
 except:
     pass
 
-DB_PATH = '/data/favorites.db' if os.path.exists('/data') else 'favorites.db'
+DATABASE_URL = os.environ['DATABASE_URL']
+
+def get_db():
+    return psycopg2.connect(DATABASE_URL)
 
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            user_id TEXT PRIMARY KEY,
-            favorites TEXT
-        )
-    ''')
-    try:
-        c.execute('ALTER TABLE users ADD COLUMN push_enabled INTEGER DEFAULT 0')
-    except:
-        pass
-    
-        c.execute('''CREATE TABLE IF NOT EXISTS portfolio (
-                     user_id TEXT,
-                     code TEXT,
-                     cost REAL,
-                     shares INTEGER,
-                     PRIMARY KEY (user_id, code)
-                 )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS volatility_log (
-                     date TEXT,
-                     code TEXT,
-                     alert_type TEXT,
-                     PRIMARY KEY (date, code, alert_type)
-                 )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS alerts (
-                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                 user_id TEXT,
-                 code TEXT,
-                 condition TEXT,
-                 target_price REAL)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        user_id TEXT PRIMARY KEY,
+        favorites TEXT,
+        push_enabled INTEGER DEFAULT 0
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS portfolio (
+        user_id TEXT,
+        code TEXT,
+        cost REAL,
+        shares INTEGER,
+        PRIMARY KEY (user_id, code)
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS alerts (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT,
+        code TEXT,
+        condition TEXT,
+        target_price REAL
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS stock_names (
+        code TEXT PRIMARY KEY,
+        name TEXT
+    )''')
     conn.commit()
     conn.close()
 
@@ -65,46 +61,46 @@ init_db()
 # ---- DB Functions ----
 
 def update_portfolio(user_id, code, cost, shares):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT cost, shares FROM portfolio WHERE user_id=? AND code=?', (user_id, code))
+    c.execute('SELECT cost, shares FROM portfolio WHERE user_id=%s AND code=%s', (user_id, code))
     row = c.fetchone()
     if row:
         old_cost, old_shares = row
         new_shares = old_shares + shares
         if new_shares <= 0:
-            c.execute('DELETE FROM portfolio WHERE user_id=? AND code=?', (user_id, code))
+            c.execute('DELETE FROM portfolio WHERE user_id=%s AND code=%s', (user_id, code))
         else:
             new_cost = ((old_cost * old_shares) + (cost * shares)) / new_shares
-            c.execute('UPDATE portfolio SET cost=?, shares=? WHERE user_id=? AND code=?', (new_cost, new_shares, user_id, code))
+            c.execute('UPDATE portfolio SET cost=%s, shares=%s WHERE user_id=%s AND code=%s', (new_cost, new_shares, user_id, code))
     else:
         if shares > 0:
-            c.execute('INSERT INTO portfolio (user_id, code, cost, shares) VALUES (?, ?, ?, ?)', (user_id, code, cost, shares))
+            c.execute('INSERT INTO portfolio (user_id, code, cost, shares) VALUES (%s, %s, %s, %s)', (user_id, code, cost, shares))
     conn.commit()
     conn.close()
 
 def get_portfolio(user_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT code, cost, shares FROM portfolio WHERE user_id=?', (user_id,))
+    c.execute('SELECT code, cost, shares FROM portfolio WHERE user_id=%s', (user_id,))
     rows = c.fetchall()
     conn.close()
     return rows
 
 def clear_portfolio(user_id, code=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
     if code:
-        c.execute('DELETE FROM portfolio WHERE user_id=? AND code=?', (user_id, code))
+        c.execute('DELETE FROM portfolio WHERE user_id=%s AND code=%s', (user_id, code))
     else:
-        c.execute('DELETE FROM portfolio WHERE user_id=?', (user_id,))
+        c.execute('DELETE FROM portfolio WHERE user_id=%s', (user_id,))
     conn.commit()
     conn.close()
 
 def get_favorites(user_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT favorites FROM users WHERE user_id = ?', (user_id,))
+    c.execute('SELECT favorites FROM users WHERE user_id = %s', (user_id,))
     row = c.fetchone()
     conn.close()
     if row and row[0]:
@@ -112,25 +108,26 @@ def get_favorites(user_id):
     return []
 
 def set_favorites(user_id, fav_list):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
-    c.execute('REPLACE INTO users (user_id, favorites) VALUES (?, ?)', (user_id, ','.join(fav_list)))
+    c.execute('INSERT INTO users (user_id, favorites) VALUES (%s, %s) ON CONFLICT (user_id) DO UPDATE SET favorites=%s',
+              (user_id, ','.join(fav_list), ','.join(fav_list)))
     conn.commit()
     conn.close()
 
 def add_alert(user_id, code, condition, target_price):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
-    c.execute('INSERT INTO alerts (user_id, code, condition, target_price) VALUES (?, ?, ?, ?)', 
+    c.execute('INSERT INTO alerts (user_id, code, condition, target_price) VALUES (%s, %s, %s, %s)',
               (user_id, code, condition, target_price))
     conn.commit()
     conn.close()
 
 def get_alerts(user_id=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
     if user_id:
-        c.execute('SELECT id, code, condition, target_price FROM alerts WHERE user_id = ?', (user_id,))
+        c.execute('SELECT id, code, condition, target_price FROM alerts WHERE user_id = %s', (user_id,))
     else:
         c.execute('SELECT id, user_id, code, condition, target_price FROM alerts')
     rows = c.fetchall()
@@ -138,12 +135,12 @@ def get_alerts(user_id=None):
     return rows
 
 def del_alert(alert_id, user_id=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
     if user_id:
-        c.execute('DELETE FROM alerts WHERE id = ? AND user_id = ?', (alert_id, user_id))
+        c.execute('DELETE FROM alerts WHERE id = %s AND user_id = %s', (alert_id, user_id))
     else:
-        c.execute('DELETE FROM alerts WHERE id = ?', (alert_id,))
+        c.execute('DELETE FROM alerts WHERE id = %s', (alert_id,))
     conn.commit()
     conn.close()
 
@@ -292,24 +289,25 @@ def get_futures_info(commodity_id):
 
 def update_stock_names_db():
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db()
         c = conn.cursor()
-        c.execute('CREATE TABLE IF NOT EXISTS stock_names (code TEXT PRIMARY KEY, name TEXT)')
-        
+
         try:
             res = requests.get('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL', timeout=10).json()
             for item in res:
-                c.execute('INSERT OR REPLACE INTO stock_names (code, name) VALUES (?, ?)', (item['Code'], item['Name']))
+                c.execute('INSERT INTO stock_names (code, name) VALUES (%s, %s) ON CONFLICT (code) DO UPDATE SET name=%s',
+                          (item['Code'], item['Name'], item['Name']))
         except Exception as e:
             print("TWSE names error:", e)
-            
+
         try:
             res = requests.get('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes', timeout=10).json()
             for item in res:
-                c.execute('INSERT OR REPLACE INTO stock_names (code, name) VALUES (?, ?)', (item['SecuritiesCompanyCode'], item['CompanyName']))
+                c.execute('INSERT INTO stock_names (code, name) VALUES (%s, %s) ON CONFLICT (code) DO UPDATE SET name=%s',
+                          (item['SecuritiesCompanyCode'], item['CompanyName'], item['CompanyName']))
         except Exception as e:
             print("TPEx names error:", e)
-            
+
         conn.commit()
         conn.close()
         print("Stock names DB updated.")
@@ -326,9 +324,9 @@ def resolve_stock_code(arg):
     if re.match(r'^[A-Za-z0-9.]+$', arg):
         return arg.upper()
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db()
         c = conn.cursor()
-        c.execute("SELECT code FROM stock_names WHERE name=? OR name=?", (arg, arg.upper()))
+        c.execute("SELECT code FROM stock_names WHERE name=%s OR name=%s", (arg, arg.upper()))
         row = c.fetchone()
         conn.close()
         if row:
@@ -708,9 +706,9 @@ def check_price_alerts():
                 print(f"Failed to push message: {e}")
 
 def daily_summary_push():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT user_id, favorites FROM users WHERE push_enabled=1 AND favorites IS NOT NULL AND favorites != ""')
+    c.execute("SELECT user_id, favorites FROM users WHERE push_enabled=1 AND favorites IS NOT NULL AND favorites != ''")
     rows = c.fetchall()
     conn.close()
     
@@ -742,6 +740,10 @@ scheduler.add_job(func=daily_summary_push, trigger="cron", hour=13, minute=35, t
 scheduler.add_job(func=update_stock_names_db, trigger="cron", hour=4, minute=0, timezone="Asia/Taipei")
 scheduler.start()
 
+
+@app.route("/ping")
+def ping():
+    return 'ok'
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -981,18 +983,18 @@ def handle_message(event):
 
     # 3. Favorites & Push Commands
     if text == '開啟推播':
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db()
         c = conn.cursor()
-        c.execute('INSERT INTO users (user_id, push_enabled) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET push_enabled=1', (user_id,))
+        c.execute('INSERT INTO users (user_id, push_enabled) VALUES (%s, 1) ON CONFLICT (user_id) DO UPDATE SET push_enabled=1', (user_id,))
         conn.commit()
         conn.close()
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="✅ 已開啟盤後總結自動推播！每日下午 1:35 將為您整理持股狀況。"))
         return
-        
+
     if text == '關閉推播':
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db()
         c = conn.cursor()
-        c.execute('UPDATE users SET push_enabled=0 WHERE user_id=?', (user_id,))
+        c.execute('UPDATE users SET push_enabled=0 WHERE user_id=%s', (user_id,))
         conn.commit()
         conn.close()
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text="✅ 已關閉自動推播。"))
