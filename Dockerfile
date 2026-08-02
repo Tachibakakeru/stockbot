@@ -7,4 +7,4 @@ RUN pip install -r requirements.txt
 
 COPY main.py .
 
-CMD ["python", "main.py"]
+CMD gunicorn --bind 0.0.0.0:$PORT main:app
