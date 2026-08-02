@@ -1,7 +1,7 @@
 flask
 line-bot-sdk==2.4.2
 requests
-apscheduler
+apscheduler<4.0
 feedparser
 beautifulsoup4
 lxml
