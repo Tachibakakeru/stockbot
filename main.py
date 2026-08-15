@@ -735,7 +735,7 @@ def daily_summary_push():
                 print(f"Failed to push daily summary: {e}")
 
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=check_price_alerts, trigger="interval", minutes=5)
+scheduler.add_job(func=check_price_alerts, trigger="interval", minutes=10)
 scheduler.add_job(func=daily_summary_push, trigger="cron", hour=13, minute=35, timezone="Asia/Taipei")
 scheduler.add_job(func=update_stock_names_db, trigger="cron", hour=4, minute=0, timezone="Asia/Taipei")
 scheduler.start()
